@@ -9,19 +9,29 @@ export default function AuthCallback() {
     const params = new URLSearchParams(search);
     const token = params.get("token");
 
-    if (token) {
-      // Store the JWT directly
-      localStorage.setItem("auth_token", token);
+    if (!token) return navigate("/login");
 
-      // Optional: if backend sends user name in query or payload, store it
-      const name = params.get("name") || "User"; 
-      localStorage.setItem("user_name", name);
+    (async () => {
+      try {
+        const res = await fetch("http://localhost:5000/auth/decrypt", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token }),
+        });
 
-      // Redirect to dashboard
-      navigate("/dashboard");
-    } else {
-      navigate("/login");
-    }
+        const data = await res.json();
+        if (data.valid && data.jwt) {
+          localStorage.setItem("auth_token", data.jwt);
+          localStorage.setItem("user_name", data.payload.name);
+          navigate("/dashboard");
+        } else {
+          navigate("/login");
+        }
+      } catch (err) {
+        console.error(err);
+        navigate("/login");
+      }
+    })();
   }, [search, navigate]);
 
   return <div>Logging in...</div>;

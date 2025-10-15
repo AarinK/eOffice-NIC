@@ -79,12 +79,15 @@ export default function Login() {
   };
 
   // ✅ SMS OTP verification
-  const handleVerifyOTP = async (e) => {
+const handleVerifyOTP = async (e) => {
   e.preventDefault();
   if (!otpData) return;
+
   setLoading(true);
   setError("");
+
   try {
+    // 1️⃣ Verify OTP and get redirectUrl containing encrypted token
     const res = await fetch("http://localhost:5000/auth/verifyOtp", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -95,28 +98,55 @@ export default function Login() {
         service_key: serviceKey,
       }),
     });
+
     const data = await res.json();
-    if (data.success && data.redirectUrl) {
-      const urlParams = new URL(data.redirectUrl);
-const token = urlParams.searchParams.get("token");
 
-if (token) {
-  localStorage.setItem("auth_token", token); // store JWT directly
-  localStorage.setItem("user_name", otpData.name || username);
-  window.location.href = "/dashboard";
-} else {
-  setError("Token missing in redirect URL");
-}
-
-    } else {
-      setError(data.error || "Invalid OTP");
+    if (!data.success || !data.redirectUrl) {
+      setError(data.error || "Invalid OTP or server error");
+      setLoading(false);
+      return;
     }
+
+    // 2️⃣ Extract encrypted token from redirectUrl
+    const urlParams = new URL(data.redirectUrl);
+    const encryptedToken = urlParams.searchParams.get("token");
+
+    if (!encryptedToken) {
+      setError("Token missing in server response");
+      setLoading(false);
+      return;
+    }
+
+    // 3️⃣ Call decrypt endpoint to get actual JWT
+    const decryptRes = await fetch("http://localhost:5000/auth/decrypt", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: encryptedToken }),
+    });
+
+    const decryptData = await decryptRes.json();
+
+    if (!decryptData.valid || !decryptData.jwt) {
+      setError("Failed to decrypt token");
+      setLoading(false);
+      return;
+    }
+
+    // 4️⃣ Store decrypted JWT and user info
+    localStorage.setItem("auth_token", decryptData.jwt);
+    localStorage.setItem("user_name", decryptData.payload.name || otpData.name || username);
+
+    // 5️⃣ Redirect to dashboard
+    window.location.href = "/dashboard";
+
   } catch (err) {
-    console.error(err);
+    console.error("[handleVerifyOTP] Error:", err);
     setError("Server error while verifying OTP");
+  } finally {
+    setLoading(false);
   }
-  setLoading(false);
 };
+
 
   // ✅ OAuth logins
   const handleGoogleLogin = () => {

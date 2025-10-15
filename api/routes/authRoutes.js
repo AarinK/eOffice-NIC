@@ -162,11 +162,11 @@ router.post("/verifyOtp", async (req, res) => {
 
     // 6️⃣ Sign JWT
     const token = jwt.sign(payload, JWT_SECRET, { algorithm: "HS512", expiresIn: "15m" });
-
+    const encryptedToken=encryptToken(token)
 
     // 7️⃣ Redirect to frontend callback
     const redirectBase = process.env.FRONTEND_URL?.replace(/\/$/, "") || "http://localhost:3000";
-const redirectUrl = `${redirectBase}/auth/callback?token=${token}`;
+const redirectUrl = `${redirectBase}/auth/callback?token=${encodeURIComponent(encryptedToken)}`;
     console.log("Redirecting to:", redirectUrl);
 
     res.json({ success: true, redirectUrl });
@@ -266,23 +266,20 @@ router.get("/logout", async (req, res) => {
 router.post("/decrypt", (req, res) => {
   try {
     const { token } = req.body;
+    const decryptedJWT = decryptToken(token); // decrypt transport-only token
 
-    // Step 1: Decrypt the incoming token
-    const decrypted = decryptToken(token);
-
-    // Step 2: Verify the decrypted token
-    const decoded = jwt.verify(decrypted, JWT_SECRET);
-
-    // Step 3: Return both the decrypted JWT and payload
-    res.json({
-      valid: true,
-      jwt: decrypted,   // this is now a usable JWT for Authorization header
-      payload: decoded, // decoded payload for frontend use
+    const payload = jwt.verify(decryptedJWT, process.env.JWT_SECRET, {
+      algorithms: ["HS512"],
+      issuer: "http://localhost:5000",
+      audience: "http://localhost:5174",
     });
+
+    res.json({ valid: true, jwt: decryptedJWT, payload });
   } catch (err) {
     res.status(400).json({ valid: false, error: err.message });
   }
 });
+
 
 router.post("/encrypt", (req, res) => {
   try {
@@ -424,8 +421,10 @@ router.get(
       expiresIn: "1h",
     });
 
+    const encryptedToken=encryptToken(token);
+
     const redirectBase = process.env.FRONTEND_URL || "http://localhost:5174";
-    res.redirect(`${redirectBase}/auth/callback?token=${token}`);
+    res.redirect(`${redirectBase}/auth/callback?token=${encodeURIComponent(encryptedToken)}`);
   }
 );
 
