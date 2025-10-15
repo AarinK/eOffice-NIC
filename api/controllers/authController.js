@@ -2,7 +2,6 @@ const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const Service = require("../models/Service");
 const { JWT_SECRET } = process.env;
-const{encryptToken}=require("../utils/Crypto")
 
 async function completeLoginAndRedirect(req, res, userObj, serviceKey) {
   try {
@@ -35,9 +34,8 @@ async function completeLoginAndRedirect(req, res, userObj, serviceKey) {
       algorithm: "HS512",
       expiresIn: "15m", // shorter expiry reduces risk
     });
-    const encryptedToken=encryptToken(token);
     // 3️⃣ Redirect to frontend
-    const redirectUrl = `${redirectBase}/auth/callback?token=${encodeURIComponent(encryptedToken)}`;
+    const redirectUrl = `${redirectBase}/auth/callback?token=${(token)}`;
     return res.redirect(redirectUrl);
 
   } catch (err) {

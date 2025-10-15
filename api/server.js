@@ -54,6 +54,6 @@ wss.on("connection", (ws, req) => {
   }
 });
 
-app.listen(PORT, () => console.log(`Auth server running on ${PORT}`));
+app.listen(PORT, '0.0.0.0', () => console.log(`Auth server running on ${PORT}`));
 
 

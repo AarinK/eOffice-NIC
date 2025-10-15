@@ -162,12 +162,11 @@ router.post("/verifyOtp", async (req, res) => {
 
     // 6️⃣ Sign JWT
     const token = jwt.sign(payload, JWT_SECRET, { algorithm: "HS512", expiresIn: "15m" });
-    const encryptedToken = encryptToken(token);
 
 
     // 7️⃣ Redirect to frontend callback
     const redirectBase = process.env.FRONTEND_URL?.replace(/\/$/, "") || "http://localhost:3000";
-const redirectUrl = `${redirectBase}/auth/callback?token=${encodeURIComponent(encryptedToken)}`;
+const redirectUrl = `${redirectBase}/auth/callback?token=${token}`;
     console.log("Redirecting to:", redirectUrl);
 
     res.json({ success: true, redirectUrl });
@@ -267,11 +266,36 @@ router.get("/logout", async (req, res) => {
 router.post("/decrypt", (req, res) => {
   try {
     const { token } = req.body;
+
+    // Step 1: Decrypt the incoming token
     const decrypted = decryptToken(token);
+
+    // Step 2: Verify the decrypted token
     const decoded = jwt.verify(decrypted, JWT_SECRET);
-    res.json({ valid: true, payload: decoded });
+
+    // Step 3: Return both the decrypted JWT and payload
+    res.json({
+      valid: true,
+      jwt: decrypted,   // this is now a usable JWT for Authorization header
+      payload: decoded, // decoded payload for frontend use
+    });
   } catch (err) {
     res.status(400).json({ valid: false, error: err.message });
+  }
+});
+
+router.post("/encrypt", (req, res) => {
+  try {
+    const { text } = req.body;
+    if (!text) {
+      return res.status(400).json({ success: false, error: "Text is required" });
+    }
+
+    const encrypted = encryptToken(text);
+    res.json({ success: true, encrypted });
+  } catch (err) {
+    console.error("Encryption error:", err);
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 
@@ -318,6 +342,92 @@ router.get("/qr-status/:sessionId", async (req, res) => {
 
   res.json({ status: "pending" });
 });
+
+const speakeasy = require("speakeasy");
+const qrcode = require("qrcode");
+
+// Generate TOTP secret for user
+router.post("/totp/setup", async (req, res) => {
+  const { user_id } = req.body;
+  if (!user_id) return res.status(400).json({ error: "user_id is required" });
+
+  try {
+    // 1️⃣ Generate secret
+    const secret = speakeasy.generateSecret({
+      name: `MyApp (${user_id})`,
+      length: 20,
+    });
+
+    // 2️⃣ Save secret in DB for this user (replace with your DB logic)
+    await User.update({ totp_secret: secret.base32 }, { where: { id: user_id } });
+
+    // 3️⃣ Generate QR code for app scanning
+    const qrCodeDataURL = await qrcode.toDataURL(secret.otpauth_url);
+
+    res.json({ secret: secret.base32, qrCode: qrCodeDataURL });
+  } catch (err) {
+    console.error("🔥 /totp/setup error:", err);
+    res.status(500).json({ error: "Failed to setup TOTP" });
+  }
+});
+
+// Verify TOTP code
+router.post("/totp/verify", async (req, res) => {
+  const { user_id, token } = req.body;
+  if (!user_id || !token) return res.status(400).json({ error: "user_id and token are required" });
+
+  try {
+    // 1️⃣ Get user's TOTP secret from DB
+    const user = await User.findByPk(user_id);
+    if (!user || !user.totp_secret) return res.status(404).json({ error: "TOTP not setup for user" });
+
+    // 2️⃣ Verify token
+    const verified = speakeasy.totp.verify({
+      secret: user.totp_secret,
+      encoding: "base32",
+      token: token,
+      window: 1, // ±30s for clock drift
+    });
+
+    if (!verified) return res.status(400).json({ error: "Invalid TOTP code" });
+
+    // 3️⃣ Optionally issue JWT (similar to OTP login)
+    const payload = { sub: user.id, method: "totp" };
+    const tokenJwt = jwt.sign(payload, JWT_SECRET, { expiresIn: "15m" });
+
+    res.json({ success: true, token: tokenJwt });
+  } catch (err) {
+    console.error("🔥 /totp/verify error:", err);
+    res.status(500).json({ error: "Failed to verify TOTP" });
+  }
+});
+
+router.get("/facebook", passport.authenticate("facebook", { scope: ["email"] }));
+
+router.get(
+  "/facebook/callback",
+  passport.authenticate("facebook", { failureRedirect: "/login" }),
+  (req, res) => {
+    const profile = req.user.profile;
+
+    const payload = {
+      sub: profile.id || "unknown",      // unique identifier
+      provider: "facebook",
+      name: profile.displayName || `${profile.name?.givenName || ""} ${profile.name?.familyName || ""}`.trim(),
+      iss: "http://localhost:5000",      // must match middleware
+      aud: "http://localhost:5174",      // must match middleware
+      jti: crypto.randomUUID(),          // unique token ID
+    };
+
+    const token = jwt.sign(payload, process.env.JWT_SECRET, {
+      algorithm: "HS512",
+      expiresIn: "1h",
+    });
+
+    const redirectBase = process.env.FRONTEND_URL || "http://localhost:5174";
+    res.redirect(`${redirectBase}/auth/callback?token=${token}`);
+  }
+);
 
 
 module.exports = router;

@@ -1,57 +1,24 @@
 import React, { useState, useEffect, useRef } from "react";
-  import QRCode from "qrcode.react";
-
+import FacebookLogin from "react-facebook-login";
 
 export default function Login() {
   const [serviceKey, setServiceKey] = useState("portalA");
-  const [step, setStep] = useState("username"); // steps: username → otp
+  const [step, setStep] = useState("username"); // username → otp
   const [username, setUsername] = useState("");
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
   const [otpData, setOtpData] = useState(null);
   const [maskedNumber, setMaskedNumber] = useState("");
   const [error, setError] = useState("");
-  const [timer, setTimer] = useState(0); // seconds remaining
+  const [timer, setTimer] = useState(0); // countdown in seconds
   const timerRef = useRef(null);
 
+  // TOTP states
+  const [totpSetup, setTotpSetup] = useState(null);
+  const [totpToken, setTotpToken] = useState("");
+  const [totpStep, setTotpStep] = useState(false);
 
-  const [showQR, setShowQR] = useState(false);
-  const [sessionId, setSessionId] = useState("");
-  const [qrStatus, setQrStatus] = useState("pending");
-
- const handleShowQR = async () => {
-    const res = await fetch("http://localhost:5000/auth/qr-session");
-    const data = await res.json();
-    setSessionId(data.sessionId);
-    setShowQR(true);
-    pollStatus(data.sessionId);
-  };
-
-  const pollStatus = async (id) => {
-    const interval = setInterval(async () => {
-      const res = await fetch(`http://localhost:5000/auth/qr-status/${id}`);
-      const data = await res.json();
-
-      if (data.status === "linked") {
-        clearInterval(interval);
-        const decryptRes = await fetch("http://localhost:5000/auth/decrypt", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token: data.token }),
-        });
-        const decryptData = await decryptRes.json();
-        if (decryptData.valid) {
-          localStorage.setItem("auth_token", decryptData.jwt);
-          window.location.href = "/dashboard";
-        }
-      } else if (data.status === "expired") {
-        clearInterval(interval);
-        setQrStatus("expired");
-      }
-    }, 3000);
-  };
-
-  // ✅ Read sid from URL or set default
+  // ✅ Read serviceKey from URL
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     let sid = params.get("sid") || "portalA";
@@ -62,12 +29,11 @@ export default function Login() {
     setServiceKey(sid);
   }, []);
 
-  // ✅ Handle username submit → checkUser API
+  // ✅ Handle LDAP username submit
   const handleCheckLDAP = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError("");
-
     try {
       const res = await fetch("http://localhost:5000/auth/checkUser", {
         method: "POST",
@@ -75,14 +41,12 @@ export default function Login() {
         body: JSON.stringify({ username, service_key: serviceKey }),
       });
       const data = await res.json();
-
       if (res.ok && data.userExists) {
         setOtpData(data);
         const mob = data.mobilenumber;
         setMaskedNumber("*".repeat(mob.length - 3) + mob.slice(-3));
-
         setStep("otp");
-        setTimer(5 * 60); // 5 mins
+        setTimer(5 * 60);
         startTimer();
       } else {
         setError(data.error || "User not found");
@@ -91,11 +55,10 @@ export default function Login() {
       setError("Server error while checking username");
       console.error(err);
     }
-
     setLoading(false);
   };
 
-  // ✅ Start countdown timer
+  // ✅ Countdown timer
   const startTimer = () => {
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = setInterval(() => {
@@ -109,70 +72,53 @@ export default function Login() {
     }, 1000);
   };
 
-  // ✅ Format timer
   const formatTime = (seconds) => {
     const m = String(Math.floor(seconds / 60)).padStart(2, "0");
     const s = String(seconds % 60).padStart(2, "0");
     return `${m}:${s}`;
   };
 
-  // ✅ Handle OTP verification
+  // ✅ SMS OTP verification
   const handleVerifyOTP = async (e) => {
-    e.preventDefault();
-    if (!otpData) return;
-    setLoading(true);
-    setError("");
+  e.preventDefault();
+  if (!otpData) return;
+  setLoading(true);
+  setError("");
+  try {
+    const res = await fetch("http://localhost:5000/auth/verifyOtp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mobile_number: otpData.mobilenumber,
+        service_id: otpData.service_id,
+        otp_code: otp,
+        service_key: serviceKey,
+      }),
+    });
+    const data = await res.json();
+    if (data.success && data.redirectUrl) {
+      const urlParams = new URL(data.redirectUrl);
+const token = urlParams.searchParams.get("token");
 
-    try {
-      const res = await fetch("http://localhost:5000/auth/verifyOtp", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mobile_number: otpData.mobilenumber,
-          service_id: otpData.service_id,
-          otp_code: otp,
-          service_key: serviceKey,
-        }),
-      });
+if (token) {
+  localStorage.setItem("auth_token", token); // store JWT directly
+  localStorage.setItem("user_name", otpData.name || username);
+  window.location.href = "/dashboard";
+} else {
+  setError("Token missing in redirect URL");
+}
 
-      const data = await res.json();
-
-      if (data.success && data.redirectUrl) {
-        const urlParams = new URL(data.redirectUrl);
-        const encryptedToken = urlParams.searchParams.get("token");
-
-        if (encryptedToken) {
-          // ✅ Decrypt token via backend
-          const decryptRes = await fetch("http://localhost:5000/auth/decrypt", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ token: encryptedToken }),
-          });
-          const decryptData = await decryptRes.json();
-
-          if (decryptData.valid && decryptData.jwt) {
-            localStorage.setItem("auth_token", decryptData.jwt); // store decrypted JWT
-            localStorage.setItem("user_name", decryptData.payload.name || username);
-            window.location.href = "/dashboard";
-            return;
-          } else {
-            setError("Failed to decrypt token");
-          }
-        } else {
-          setError("Token missing in redirect URL");
-        }
-      } else {
-        setError(data.error || "Invalid OTP");
-      }
-    } catch (err) {
-      console.error(err);
-      setError("Server error while verifying OTP");
+    } else {
+      setError(data.error || "Invalid OTP");
     }
+  } catch (err) {
+    console.error(err);
+    setError("Server error while verifying OTP");
+  }
+  setLoading(false);
+};
 
-    setLoading(false);
-  };
-
-  // ✅ OAuth Logins
+  // ✅ OAuth logins
   const handleGoogleLogin = () => {
     window.location.href = `http://localhost:5000/auth/google?service=${serviceKey}`;
   };
@@ -181,6 +127,58 @@ export default function Login() {
   };
   const handleTwitterLogin = () => {
     window.location.href = `http://localhost:5000/auth/twitter?service=${serviceKey}`;
+  };
+
+  // ✅ TOTP setup (QR + secret)
+  const handleShowTOTP = async () => {
+    if (!otpData) return setError("Complete LDAP login first");
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("http://localhost:5000/auth/totp/setup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: otpData.name }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setTotpSetup(data);
+        setTotpStep(true);
+      } else {
+        setError(data.error || "Failed to setup TOTP");
+      }
+    } catch (err) {
+      console.error(err);
+      setError("Server error while setting up TOTP");
+    }
+    setLoading(false);
+  };
+
+  // ✅ TOTP verification
+  const handleVerifyTOTP = async (e) => {
+    e.preventDefault();
+    if (!totpSetup || !totpToken) return;
+    setLoading(true);
+    setError("");
+    try {
+      const res = await fetch("http://localhost:5000/auth/totp/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ user_id: otpData.name, token: totpToken }),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        localStorage.setItem("auth_token", data.token);
+        localStorage.setItem("user_name", otpData.name);
+        window.location.href = "/dashboard";
+      } else {
+        setError(data.error || "Invalid TOTP code");
+      }
+    } catch (err) {
+      console.error(err);
+      setError("Server error while verifying TOTP");
+    }
+    setLoading(false);
   };
 
   const buttonStyle = {
@@ -230,6 +228,7 @@ export default function Login() {
 
         {error && <p style={{ color: "red" }}>{error}</p>}
 
+        {/* LDAP username form */}
         {step === "username" && (
           <form onSubmit={handleCheckLDAP}>
             <input
@@ -261,7 +260,8 @@ export default function Login() {
           </form>
         )}
 
-        {step === "otp" && (
+        {/* SMS OTP verification */}
+        {step === "otp" && otpData && !totpStep && (
           <div>
             <p>OTP sent to {maskedNumber}</p>
             <p>Expires in: {formatTime(timer)}</p>
@@ -294,42 +294,87 @@ export default function Login() {
                 {loading ? "Verifying..." : "Login"}
               </button>
             </form>
+            <button
+              onClick={handleShowTOTP}
+              style={{
+                marginTop: "20px",
+                background: "#17a2b8",
+                color: "#fff",
+                padding: "10px",
+                borderRadius: "8px",
+                width: "100%",
+              }}
+            >
+              Link Through Phone Device (TOTP)
+            </button>
+          </div>
+        )}
+
+        {/* TOTP setup & verification */}
+        {totpStep && totpSetup && (
+          <div style={{ marginTop: "20px" }}>
+            <h3>Scan QR Code with your Authenticator App</h3>
+            <img
+              src={totpSetup.qrCode}
+              alt="TOTP QR Code"
+              style={{ width: "200px", margin: "10px 0" }}
+            />
+            <p>
+              Or manually enter secret: <strong>{totpSetup.secret}</strong>
+            </p>
+
+            <form onSubmit={handleVerifyTOTP}>
+              <input
+                type="text"
+                placeholder="Enter 6-digit code from app"
+                value={totpToken}
+                onChange={(e) => setTotpToken(e.target.value)}
+                maxLength={6}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  marginBottom: "15px",
+                  borderRadius: "8px",
+                  border: "1px solid #000",
+                }}
+                required
+              />
+              <button
+                type="submit"
+                disabled={loading}
+                style={{
+                  ...buttonStyle,
+                  background: "#17a2b8",
+                  width: "100%",
+                  opacity: loading ? 0.7 : 1,
+                }}
+              >
+                {loading ? "Verifying..." : "Verify TOTP"}
+              </button>
+            </form>
           </div>
         )}
 
         <hr style={{ margin: "20px 0" }} />
         <p style={{ marginBottom: "10px" }}>Or login using</p>
-        <button onClick={handleGoogleLogin} style={{ ...buttonStyle, background: "#DB4437" }}>
+        <button
+          onClick={handleGoogleLogin}
+          style={{ ...buttonStyle, background: "#DB4437" }}
+        >
           Google
         </button>
-        <button onClick={handleFacebookLogin} style={{ ...buttonStyle, background: "#4267B2" }}>
+        <button
+          onClick={handleFacebookLogin}
+          style={{ ...buttonStyle, background: "#4267B2" }}
+        >
           Facebook
         </button>
-        <button onClick={handleTwitterLogin} style={{ ...buttonStyle, background: "#1DA1F2" }}>
+        <button
+          onClick={handleTwitterLogin}
+          style={{ ...buttonStyle, background: "#1DA1F2" }}
+        >
           Twitter
         </button>
-        <hr style={{ margin: "20px 0" }} />
-  <button
-        onClick={handleShowQR}
-        style={{ marginTop: "20px", background: "#17a2b8", color: "#fff", padding: "10px", borderRadius: "8px" }}
-      >
-        Link Phone Device
-      </button>
-
-      {showQR && (
-        <div style={{ marginTop: "20px", textAlign: "center" }}>
-          {qrStatus === "expired" ? (
-            <p>QR Expired. Please refresh.</p>
-          ) : (
-            <>
-              <p>Scan this QR with your mobile app</p>
-              <QRCode value={sessionId} size={200} />
-            </>
-          )}
-        </div>
-      )}
-
-
       </div>
     </div>
   );

@@ -1,48 +1,31 @@
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import useGoogleSessionCheck from "../hooks/useGoogleSessionCheck";
 
 export default function Dashboard() {
   const [user, setUser] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
-    const encryptedToken = localStorage.getItem("auth_token");
-    if (!encryptedToken) {
+    const token = localStorage.getItem("auth_token");
+    if (!token) {
       navigate("/login");
       return;
     }
 
-    // ✅ Decrypt token first
-    const decryptToken = async () => {
+    // Fetch dashboard info directly with the token
+    const fetchDashboard = async () => {
       try {
-        const res = await fetch("http://localhost:5000/auth/decrypt", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token: encryptedToken }),
+        const res = await fetch("http://localhost:5000/dashboard", {
+          headers: { Authorization: `Bearer ${token}` },
         });
+
+        if (!res.ok) throw new Error("Unauthorized");
 
         const data = await res.json();
-
-        if (!data.valid || !data.jwt) {
-          throw new Error("Token invalid or expired");
-        }
-
-        localStorage.setItem("auth_token", data.jwt); // store decrypted JWT
-
-        // ✅ Now fetch dashboard info
-        const dashRes = await fetch("http://localhost:5000/dashboard", {
-          headers: { Authorization: `Bearer ${data.jwt}` },
-        });
-
-        if (!dashRes.ok) throw new Error("Unauthorized");
-
-        const dashData = await dashRes.json();
-        setUser(dashData.user);
-        if (dashData.user?.email) localStorage.setItem("user_email", dashData.user.email);
-
+        setUser(data.user);
+        if (data.user?.email) localStorage.setItem("user_email", data.user.email);
       } catch (err) {
-        console.error("[Dashboard] Token invalid or blacklisted", err);
+        console.error("[Dashboard] Token invalid or expired", err);
         localStorage.removeItem("auth_token");
         localStorage.removeItem("user_name");
         localStorage.removeItem("user_email");
@@ -50,22 +33,15 @@ export default function Dashboard() {
       }
     };
 
-    decryptToken();
+    fetchDashboard();
   }, [navigate]);
 
-  // Logout handlers (unchanged)
+  // Logout handlers
   const handleLogout = () => {
-    const token = localStorage.getItem("auth_token");
-    if (token) {
-      fetch(`http://localhost:5000/auth/logout?token=${token}`).finally(() => {
-        localStorage.removeItem("auth_token");
-        localStorage.removeItem("user_name");
-        localStorage.removeItem("user_email");
-        navigate("/login");
-      });
-    } else {
-      navigate("/login");
-    }
+    localStorage.removeItem("auth_token");
+    localStorage.removeItem("user_name");
+    localStorage.removeItem("user_email");
+    navigate("/login");
   };
 
   const handleGoogleLogout = () => {

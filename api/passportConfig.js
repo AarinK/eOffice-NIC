@@ -43,15 +43,23 @@ passport.use(new GoogleStrategy({
 }));
 
 // Facebook
-passport.use(new FacebookStrategy({
-  clientID: FACEBOOK_CLIENT_ID,
-  clientSecret: FACEBOOK_CLIENT_SECRET,
-  callbackURL: FACEBOOK_CALLBACK,
-  profileFields: ["id", "emails", "name", "displayName"]
-}, (accessToken, refreshToken, profile, done) => {
-  return done(null, { provider: "facebook", profile });
-}));
+passport.use(
+  new FacebookStrategy(
+    {
+      clientID: FACEBOOK_CLIENT_ID,
+      clientSecret: FACEBOOK_CLIENT_SECRET,
+      callbackURL: FACEBOOK_CALLBACK,
+      profileFields: ["id", "emails", "name", "picture.type(large)"], // ensures we get email + name
+    },
+    (accessToken, refreshToken, profile, done) => {
+      console.log("✅ Facebook login successful");
+      console.log("Profile:", profile);
 
+      // Map or create user record here
+      return done(null, { provider: "facebook", profile });
+    }
+  )
+);
 // Twitter
 passport.use(new TwitterStrategy({
   consumerKey: TWITTER_CONSUMER_KEY,
