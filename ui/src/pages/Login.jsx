@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef } from "react";
-import FacebookLogin from "react-facebook-login";
 
 export default function Login() {
   const [serviceKey, setServiceKey] = useState("portalA");
@@ -10,13 +9,18 @@ export default function Login() {
   const [otpData, setOtpData] = useState(null);
   const [maskedNumber, setMaskedNumber] = useState("");
   const [error, setError] = useState("");
-  const [timer, setTimer] = useState(0); // countdown in seconds
+  const [timer, setTimer] = useState(0);
   const timerRef = useRef(null);
 
   // TOTP states
   const [totpSetup, setTotpSetup] = useState(null);
   const [totpToken, setTotpToken] = useState("");
   const [totpStep, setTotpStep] = useState(false);
+
+  // QR login states
+  const [qrStep, setQrStep] = useState(false);
+  const [qrData, setQrData] = useState(null);
+  const [polling, setPolling] = useState(null);
 
   // ✅ Read serviceKey from URL
   useEffect(() => {
@@ -29,7 +33,7 @@ export default function Login() {
     setServiceKey(sid);
   }, []);
 
-  // ✅ Handle LDAP username submit
+  // ✅ LDAP username submit
   const handleCheckLDAP = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -58,7 +62,7 @@ export default function Login() {
     setLoading(false);
   };
 
-  // ✅ Countdown timer
+  // ✅ Countdown
   const startTimer = () => {
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = setInterval(() => {
@@ -78,88 +82,75 @@ export default function Login() {
     return `${m}:${s}`;
   };
 
-  // ✅ SMS OTP verification
-const handleVerifyOTP = async (e) => {
-  e.preventDefault();
-  if (!otpData) return;
+  // ✅ OTP verification
+  const handleVerifyOTP = async (e) => {
+    e.preventDefault();
+    if (!otpData) return;
 
-  setLoading(true);
-  setError("");
+    setLoading(true);
+    setError("");
 
-  try {
-    // 1️⃣ Verify OTP and get redirectUrl containing encrypted token
-    const res = await fetch("http://localhost:5000/auth/verifyOtp", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        mobile_number: otpData.mobilenumber,
-        service_id: otpData.service_id,
-        otp_code: otp,
-        service_key: serviceKey,
-      }),
-    });
+    try {
+      const res = await fetch("http://localhost:5000/auth/verifyOtp", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mobile_number: otpData.mobilenumber,
+          service_id: otpData.service_id,
+          otp_code: otp,
+          service_key: serviceKey,
+        }),
+      });
 
-    const data = await res.json();
+      const data = await res.json();
 
-    if (!data.success || !data.redirectUrl) {
-      setError(data.error || "Invalid OTP or server error");
+      if (!data.success || !data.redirectUrl) {
+        setError(data.error || "Invalid OTP or server error");
+        setLoading(false);
+        return;
+      }
+
+      const urlParams = new URL(data.redirectUrl);
+      const encryptedToken = urlParams.searchParams.get("token");
+
+      if (!encryptedToken) {
+        setError("Token missing in server response");
+        setLoading(false);
+        return;
+      }
+
+      const decryptRes = await fetch("http://localhost:5000/auth/decrypt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: encryptedToken }),
+      });
+
+      const decryptData = await decryptRes.json();
+
+      if (!decryptData.valid || !decryptData.jwt) {
+        setError("Failed to decrypt token");
+        setLoading(false);
+        return;
+      }
+
+      localStorage.setItem("auth_token", decryptData.jwt);
+      localStorage.setItem("user_name", decryptData.payload.name || otpData.name || username);
+
+      window.location.href = "/dashboard";
+    } catch (err) {
+      console.error("[handleVerifyOTP] Error:", err);
+      setError("Server error while verifying OTP");
+    } finally {
       setLoading(false);
-      return;
     }
-
-    // 2️⃣ Extract encrypted token from redirectUrl
-    const urlParams = new URL(data.redirectUrl);
-    const encryptedToken = urlParams.searchParams.get("token");
-
-    if (!encryptedToken) {
-      setError("Token missing in server response");
-      setLoading(false);
-      return;
-    }
-
-    // 3️⃣ Call decrypt endpoint to get actual JWT
-    const decryptRes = await fetch("http://localhost:5000/auth/decrypt", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token: encryptedToken }),
-    });
-
-    const decryptData = await decryptRes.json();
-
-    if (!decryptData.valid || !decryptData.jwt) {
-      setError("Failed to decrypt token");
-      setLoading(false);
-      return;
-    }
-
-    // 4️⃣ Store decrypted JWT and user info
-    localStorage.setItem("auth_token", decryptData.jwt);
-    localStorage.setItem("user_name", decryptData.payload.name || otpData.name || username);
-
-    // 5️⃣ Redirect to dashboard
-    window.location.href = "/dashboard";
-
-  } catch (err) {
-    console.error("[handleVerifyOTP] Error:", err);
-    setError("Server error while verifying OTP");
-  } finally {
-    setLoading(false);
-  }
-};
-
-
-  // ✅ OAuth logins
-  const handleGoogleLogin = () => {
-    window.location.href = `http://localhost:5000/auth/google?service=${serviceKey}`;
-  };
-  const handleFacebookLogin = () => {
-    window.location.href = `http://localhost:5000/auth/facebook?service=${serviceKey}`;
-  };
-  const handleTwitterLogin = () => {
-    window.location.href = `http://localhost:5000/auth/twitter?service=${serviceKey}`;
   };
 
-  // ✅ TOTP setup (QR + secret)
+  // ✅ OAuth
+  const handleGoogleLogin = () => window.location.href = `http://localhost:5000/auth/google?service=${serviceKey}`;
+  const handleFacebookLogin = () => window.location.href = `http://localhost:5000/auth/facebook?service=${serviceKey}`;
+  const handleTwitterLogin = () => window.location.href = `http://localhost:5000/auth/twitter?service=${serviceKey}`;
+
+  // ✅ TOTP setup
   const handleShowTOTP = async () => {
     if (!otpData) return setError("Complete LDAP login first");
     setLoading(true);
@@ -184,7 +175,7 @@ const handleVerifyOTP = async (e) => {
     setLoading(false);
   };
 
-  // ✅ TOTP verification
+  // ✅ TOTP verify
   const handleVerifyTOTP = async (e) => {
     e.preventDefault();
     if (!totpSetup || !totpToken) return;
@@ -211,6 +202,74 @@ const handleVerifyOTP = async (e) => {
     setLoading(false);
   };
 
+  // ✅ QR Login (generate + poll)
+const handleShowQR = async () => {
+  setQrStep(true);
+  setLoading(true);
+  setError("");
+
+  try {
+    const res = await fetch("http://localhost:5000/auth/qr/init", {
+      method: "POST", // your backend might expect POST
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || !data.loginId) {
+      setError("Failed to initialize QR login");
+      setLoading(false);
+      return;
+    }
+
+    // Generate QR code URL pointing to a custom URL scheme or backend endpoint
+    // Example: URL to poll: http://localhost:5000/auth/qr/status/<loginId>
+    const qrPayload = `myapp://login?sessionId=${data.loginId}`; // you can customize the scheme
+    // OR you can generate a QR image using an online service
+    const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?data=${encodeURIComponent(
+      qrPayload
+    )}&size=200x200`;
+
+    setQrData({ sessionId: data.loginId, qrUrl });
+    startPolling(data.loginId);
+  } catch (err) {
+    console.error(err);
+    setError("Server error while initializing QR login");
+  } finally {
+    setLoading(false);
+  }
+};
+
+
+  const startPolling = (sessionId) => {
+    if (polling) clearInterval(polling);
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`http://localhost:5000/auth/qr/status/${sessionId}`);
+        const data = await res.json();
+        if (data.loggedIn) {
+          clearInterval(interval);
+
+          // decrypt token
+          const decryptRes = await fetch("http://localhost:5000/auth/decrypt", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ token: data.token }),
+          });
+          const decryptData = await decryptRes.json();
+
+          if (decryptData.valid && decryptData.jwt) {
+            localStorage.setItem("auth_token", decryptData.jwt);
+            window.location.href = "/dashboard";
+          } else setError("Invalid token from QR login");
+        }
+      } catch (err) {
+        console.error("Polling error", err);
+      }
+    }, 3000);
+    setPolling(interval);
+  };
+
   const buttonStyle = {
     display: "flex",
     alignItems: "center",
@@ -225,10 +284,9 @@ const handleVerifyOTP = async (e) => {
     color: "#fff",
     width: "250px",
     boxShadow: "0 3px 6px rgba(0,0,0,0.2)",
-    transition: "all 0.2s ease",
   };
 
-  return (
+    return (
     <div
       style={{
         display: "flex",
@@ -237,14 +295,15 @@ const handleVerifyOTP = async (e) => {
         justifyContent: "center",
         height: "100vh",
         background: "#000",
+        color: "#fff",
       }}
     >
       <div
         style={{
           padding: "40px",
           borderRadius: "12px",
-          background: "#000",
-          boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+          background: "#111",
+          boxShadow: "0 4px 12px rgba(0,0,0,0.4)",
           textAlign: "center",
           width: "350px",
         }}
@@ -252,49 +311,103 @@ const handleVerifyOTP = async (e) => {
         <h2 style={{ marginBottom: "20px" }}>
           {step === "username" ? "Login with LDAP" : "Verify OTP"}
         </h2>
-        <p style={{ marginBottom: "10px", color: "#777" }}>
+
+        <p style={{ marginBottom: "10px", color: "#aaa" }}>
           Service: <strong>{serviceKey}</strong>
         </p>
 
-        {error && <p style={{ color: "red" }}>{error}</p>}
+        {error && <p style={{ color: "red", marginBottom: "15px" }}>{error}</p>}
 
-        {/* LDAP username form */}
-        {step === "username" && (
-          <form onSubmit={handleCheckLDAP}>
-            <input
-              type="text"
-              placeholder="Enter Username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              style={{
-                width: "100%",
-                padding: "10px",
-                marginBottom: "15px",
-                borderRadius: "8px",
-                border: "1px solid #ccc",
-              }}
-              required
-            />
+        {/* =============== LDAP USERNAME STEP =============== */}
+        {step === "username" && !qrStep && (
+          <>
+            <form onSubmit={handleCheckLDAP}>
+              <input
+                type="text"
+                placeholder="Enter Username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  marginBottom: "15px",
+                  borderRadius: "8px",
+                  border: "1px solid #444",
+                  background: "#222",
+                  color: "#fff",
+                }}
+                required
+              />
+              <button
+                type="submit"
+                disabled={loading}
+                style={{
+                  ...buttonStyle,
+                  background: "#6c757d",
+                  width: "100%",
+                  opacity: loading ? 0.7 : 1,
+                }}
+              >
+                {loading ? "Checking..." : "Send OTP"}
+              </button>
+            </form>
+
             <button
-              type="submit"
-              disabled={loading}
+              onClick={handleShowQR}
               style={{
                 ...buttonStyle,
-                background: "#6c757d",
+                background: "#ffc107",
                 width: "100%",
-                opacity: loading ? 0.7 : 1,
+                color: "#000",
               }}
             >
-              {loading ? "Checking..." : "Send OTP"}
+              Login via QR Code
             </button>
-          </form>
+          </>
         )}
 
-        {/* SMS OTP verification */}
-        {step === "otp" && otpData && !totpStep && (
+        {/* =============== QR LOGIN =============== */}
+        {qrStep && qrData && (
+          <div style={{ marginTop: "20px" }}>
+            <h3 style={{ marginBottom: "10px" }}>Scan to Login</h3>
+            <img
+              src={qrData.qrUrl}
+              alt="QR Login"
+              style={{
+                width: "220px",
+                border: "2px solid #444",
+                borderRadius: "8px",
+                padding: "8px",
+                background: "#fff",
+                marginBottom: "10px",
+              }}
+            />
+            <p style={{ color: "#bbb", fontSize: "14px" }}>
+              Scan using your phone to log in securely
+            </p>
+            <button
+              onClick={() => setQrStep(false)}
+              style={{
+                marginTop: "10px",
+                background: "#444",
+                padding: "8px 12px",
+                borderRadius: "8px",
+                color: "#fff",
+                border: "none",
+                cursor: "pointer",
+              }}
+            >
+              ← Back
+            </button>
+          </div>
+        )}
+
+        {/* =============== SMS OTP VERIFICATION =============== */}
+        {step === "otp" && otpData && !totpStep && !qrStep && (
           <div>
             <p>OTP sent to {maskedNumber}</p>
             <p>Expires in: {formatTime(timer)}</p>
+
             <form onSubmit={handleVerifyOTP}>
               <input
                 type="text"
@@ -307,7 +420,9 @@ const handleVerifyOTP = async (e) => {
                   padding: "10px",
                   marginBottom: "15px",
                   borderRadius: "8px",
-                  border: "1px solid #000",
+                  border: "1px solid #444",
+                  background: "#222",
+                  color: "#fff",
                 }}
                 required
               />
@@ -324,6 +439,7 @@ const handleVerifyOTP = async (e) => {
                 {loading ? "Verifying..." : "Login"}
               </button>
             </form>
+
             <button
               onClick={handleShowTOTP}
               style={{
@@ -333,6 +449,8 @@ const handleVerifyOTP = async (e) => {
                 padding: "10px",
                 borderRadius: "8px",
                 width: "100%",
+                border: "none",
+                cursor: "pointer",
               }}
             >
               Link Through Phone Device (TOTP)
@@ -340,17 +458,24 @@ const handleVerifyOTP = async (e) => {
           </div>
         )}
 
-        {/* TOTP setup & verification */}
+        {/* =============== TOTP SETUP & VERIFY =============== */}
         {totpStep && totpSetup && (
           <div style={{ marginTop: "20px" }}>
             <h3>Scan QR Code with your Authenticator App</h3>
             <img
               src={totpSetup.qrCode}
               alt="TOTP QR Code"
-              style={{ width: "200px", margin: "10px 0" }}
+              style={{
+                width: "200px",
+                margin: "10px 0",
+                borderRadius: "8px",
+                background: "#fff",
+                padding: "6px",
+              }}
             />
             <p>
-              Or manually enter secret: <strong>{totpSetup.secret}</strong>
+              Or manually enter secret:{" "}
+              <strong style={{ color: "#0ff" }}>{totpSetup.secret}</strong>
             </p>
 
             <form onSubmit={handleVerifyTOTP}>
@@ -365,7 +490,9 @@ const handleVerifyOTP = async (e) => {
                   padding: "10px",
                   marginBottom: "15px",
                   borderRadius: "8px",
-                  border: "1px solid #000",
+                  border: "1px solid #444",
+                  background: "#222",
+                  color: "#fff",
                 }}
                 required
               />
@@ -385,27 +512,34 @@ const handleVerifyOTP = async (e) => {
           </div>
         )}
 
-        <hr style={{ margin: "20px 0" }} />
-        <p style={{ marginBottom: "10px" }}>Or login using</p>
-        <button
-          onClick={handleGoogleLogin}
-          style={{ ...buttonStyle, background: "#DB4437" }}
-        >
-          Google
-        </button>
-        <button
-          onClick={handleFacebookLogin}
-          style={{ ...buttonStyle, background: "#4267B2" }}
-        >
-          Facebook
-        </button>
-        <button
-          onClick={handleTwitterLogin}
-          style={{ ...buttonStyle, background: "#1DA1F2" }}
-        >
-          Twitter
-        </button>
+        {/* =============== OAUTH LOGINS =============== */}
+        {!qrStep && (
+          <>
+            <hr style={{ margin: "25px 0", borderColor: "#333" }} />
+            <p style={{ marginBottom: "10px" }}>Or login using</p>
+
+            <button
+              onClick={handleGoogleLogin}
+              style={{ ...buttonStyle, background: "#DB4437" }}
+            >
+              Google
+            </button>
+            <button
+              onClick={handleFacebookLogin}
+              style={{ ...buttonStyle, background: "#4267B2" }}
+            >
+              Facebook
+            </button>
+            <button
+              onClick={handleTwitterLogin}
+              style={{ ...buttonStyle, background: "#1DA1F2" }}
+            >
+              Twitter
+            </button>
+          </>
+        )}
       </div>
     </div>
   );
+
 }
