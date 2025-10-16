@@ -146,9 +146,14 @@ export default function Login() {
   };
 
   // ✅ OAuth
-  const handleGoogleLogin = () => window.location.href = `http://localhost:5000/auth/google?service=${serviceKey}`;
-  const handleFacebookLogin = () => window.location.href = `http://localhost:5000/auth/facebook?service=${serviceKey}`;
-  const handleTwitterLogin = () => window.location.href = `http://localhost:5000/auth/twitter?service=${serviceKey}`;
+const handleGoogleLogin = () => {
+  localStorage.setItem("login_provider", "google");
+  window.location.href = `http://localhost:5000/auth/google?service=${serviceKey}`;
+};
+const handleFacebookLogin = () => {
+  localStorage.setItem("login_provider", "facebook");
+  window.location.href = `http://localhost:5000/auth/facebook?service=${serviceKey}`;
+};  const handleTwitterLogin = () => window.location.href = `http://localhost:5000/auth/twitter?service=${serviceKey}`;
 
   // ✅ TOTP setup
   const handleShowTOTP = async () => {
@@ -191,6 +196,8 @@ export default function Login() {
       if (res.ok && data.success) {
         localStorage.setItem("auth_token", data.token);
         localStorage.setItem("user_name", otpData.name);
+        localStorage.setItem("login_provider", "ldap"); // or "otp"
+
         window.location.href = "/dashboard";
       } else {
         setError(data.error || "Invalid TOTP code");

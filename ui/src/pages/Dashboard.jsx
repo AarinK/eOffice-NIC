@@ -3,16 +3,19 @@ import { useNavigate } from "react-router-dom";
 
 export default function Dashboard() {
   const [user, setUser] = useState(null);
+  const [loginProvider, setLoginProvider] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
     const token = localStorage.getItem("auth_token");
+    const provider = localStorage.getItem("login_provider");
+    setLoginProvider(provider);
+
     if (!token) {
       navigate("/login");
       return;
     }
 
-    // Fetch dashboard info directly with the token
     const fetchDashboard = async () => {
       try {
         const res = await fetch("http://localhost:5000/dashboard", {
@@ -29,6 +32,7 @@ export default function Dashboard() {
         localStorage.removeItem("auth_token");
         localStorage.removeItem("user_name");
         localStorage.removeItem("user_email");
+        localStorage.removeItem("login_provider");
         navigate("/login");
       }
     };
@@ -41,6 +45,7 @@ export default function Dashboard() {
     localStorage.removeItem("auth_token");
     localStorage.removeItem("user_name");
     localStorage.removeItem("user_email");
+    localStorage.removeItem("login_provider");
     navigate("/login");
   };
 
@@ -79,20 +84,23 @@ export default function Dashboard() {
         Logout (App Only)
       </button>
 
-      <button
-        onClick={handleGoogleLogout}
-        style={{
-          padding: "10px 20px",
-          fontSize: "16px",
-          borderRadius: "8px",
-          cursor: "pointer",
-          background: "#db4437",
-          color: "#fff",
-          border: "none",
-        }}
-      >
-        Logout (Google Account)
-      </button>
+      {/* ✅ Show Google logout only if logged in via Google */}
+      {loginProvider === "google" && (
+        <button
+          onClick={handleGoogleLogout}
+          style={{
+            padding: "10px 20px",
+            fontSize: "16px",
+            borderRadius: "8px",
+            cursor: "pointer",
+            background: "#db4437",
+            color: "#fff",
+            border: "none",
+          }}
+        >
+          Logout (Google Account)
+        </button>
+      )}
     </div>
   );
 }
