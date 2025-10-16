@@ -35,6 +35,14 @@ const ServiceLdapSetting = sequelize.define(
       type: DataTypes.STRING(255),
       allowNull: false,
     },
+
+    // 🔹 Newly added column for department OU
+    ou: {
+      type: DataTypes.STRING(255),
+      allowNull: true, // can be null if not department-specific
+      comment: "Organizational Unit (department) for LDAP search",
+    },
+
     is_active: {
       type: DataTypes.BOOLEAN,
       allowNull: false,
@@ -55,6 +63,5 @@ const ServiceLdapSetting = sequelize.define(
     timestamps: false,
   }
 );
-
 
 module.exports = ServiceLdapSetting;

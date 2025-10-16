@@ -1,7 +1,6 @@
-
 const ldap = require("ldapjs");
 
-async function checkUserExists(username, { ldap_url, base_dn, bind_dn, password }) {
+async function checkUserExists(username, { ldap_url, base_dn, bind_dn, password, ou }) {
   return new Promise((resolve, reject) => {
     const client = ldap.createClient({ url: ldap_url });
 
@@ -11,57 +10,61 @@ async function checkUserExists(username, { ldap_url, base_dn, bind_dn, password 
         return reject("LDAP admin bind failed: " + err);
       }
 
+      // 🔍 Search only within the specified OU
+      const searchBase = ou
+        ? `ou=${ou},${base_dn}`  // e.g., ou=audit,dc=mycompany,dc=com
+        : base_dn;
+
       const searchOptions = {
         scope: "sub",
         filter: `(uid=${username})`,
-        attributes: ['uid', 'cn', 'sn', 'mobile', 'title', 'description']
+        attributes: ["uid", "cn", "sn", "mobile", "title", "description"],
       };
 
-      let userExists = false;
-      let mobileNumber = "";
-      let name="";
-      let desc="";
-      let title="";
-      let cn="";
-      let sn="";
+      let userData = {
+        userExists: false,
+        mobilenumber: "",
+        name: "",
+        cn: "",
+        sn: "",
+        title: "",
+        desc: "",
+      };
 
-
-
-      client.search(base_dn, searchOptions, (err, res) => {
+      client.search(searchBase, searchOptions, (err, res) => {
         if (err) {
           client.unbind();
           return reject("LDAP search error: " + err);
         }
 
         res.on("searchEntry", (entry) => {
-          userExists = true;
-          const mobileAttr = entry.attributes.find(attr => attr.type === "mobile");
-          const nameAttr= entry.attributes.find(attr => attr.type === "uid");
-          const cnAttr= entry.attributes.find(attr => attr.type === "cn");
-          const snAttr= entry.attributes.find(attr => attr.type === "sn");
-          const titleAttr= entry.attributes.find(attr => attr.type === "title");
-          const descAttr= entry.attributes.find(attr => attr.type === "description");
+          userData.userExists = true;
+          const getAttr = (type) => {
+            const attr = entry.attributes.find((a) => a.type === type);
+            return attr ? String(attr.vals[0]) : "";
+          };
 
+          userData = {
+            userExists: true,
+            mobilenumber: getAttr("mobile"),
+            name: getAttr("uid"),
+            cn: getAttr("cn"),
+            sn: getAttr("sn"),
+            title: getAttr("title"),
+            desc: getAttr("description"),
+          };
 
-          mobileNumber = mobileAttr ? String(mobileAttr.vals[0]) : "";
-          name=nameAttr ? String(nameAttr.vals[0]) : "";
-          cn=cnAttr ? String(cnAttr.vals[0]) : "";
-          sn=snAttr ? String(snAttr.vals[0]) : "";
-          title=titleAttr ? String(titleAttr.vals[0]) : "";
-          desc=descAttr ? String(descAttr.vals[0]) : "";
-
-
-          console.log("[LDAP] Found user:", username, "mobile:", mobileNumber);
+          console.log(`[LDAP] Found user in ${ou}:`, username);
         });
 
         res.on("error", (err) => {
           client.unbind();
-          return reject("LDAP search error: " + err);
+          reject("LDAP search error: " + err);
         });
 
         res.on("end", () => {
           client.unbind();
-          resolve({ userExists, mobilenumber: mobileNumber, name:name, cn:cn,sn:sn,title:title,desc:desc });
+          resolve(userData);
         });
       });
     });
