@@ -1,6 +1,6 @@
 const ldap = require("ldapjs");
 
-async function checkUserExists(username, { ldap_url, base_dn, bind_dn, password, ou }) {
+async function checkUserExists(identifier, { ldap_url, base_dn, bind_dn, password, ou }) {
   return new Promise((resolve, reject) => {
     console.log(`[LDAP] Creating client for URL: ${ldap_url}`);
     const client = ldap.createClient({ url: ldap_url });
@@ -13,12 +13,15 @@ async function checkUserExists(username, { ldap_url, base_dn, bind_dn, password,
       }
 
       console.log("[LDAP] Successfully bound to server as", bind_dn);
-      console.log("[LDAP] Initiating search for user:", username);
+      console.log("[LDAP] Initiating search for identifier:", identifier);
+
+      // 🧩 Create dynamic filter to search by uid, mail, or mobile
+      const searchFilter = `(|(uid=${identifier})(mail=${identifier})(mobile=${identifier}))`;
 
       const searchOptions = {
         scope: "sub",
-        filter: `(uid=${username})`,
-        attributes: ["uid", "cn", "sn", "mobile", "title", "description"],
+        filter: searchFilter,
+        attributes: ["uid", "cn", "sn", "mobile", "title", "description", "mail"],
       };
 
       // Utility: perform actual search
@@ -32,6 +35,7 @@ async function checkUserExists(username, { ldap_url, base_dn, bind_dn, password,
             sn: "",
             title: "",
             desc: "",
+            mail: "",
             message: "",
           };
 
@@ -55,6 +59,7 @@ async function checkUserExists(username, { ldap_url, base_dn, bind_dn, password,
                 sn: getAttr("sn"),
                 title: getAttr("title"),
                 desc: getAttr("description"),
+                mail: getAttr("mail"),
                 message: `[LDAP] Found user in ${ouLabel || "base DN"}`,
               };
             });

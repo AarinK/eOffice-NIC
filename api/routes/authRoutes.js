@@ -10,6 +10,8 @@ const {
   facebookCallback,
   linkedinCallback,
 } = require("../controllers/oAuthController");
+const { resendOtp } = require("../controllers/resendOtpController");
+
 const { initQr, approveQr, pollQr } = require("../controllers/qrController");
 
 const router = express.Router();
@@ -17,6 +19,7 @@ const router = express.Router();
 // LDAP + OTP
 router.post("/checkUser", checkUser);
 router.post("/verifyOtp", verifyOtp);
+router.post("/resendOtp", resendOtp);
 
 // Token encryption
 router.post("/encrypt", encrypt);

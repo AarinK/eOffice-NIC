@@ -247,6 +247,45 @@ const handleShowQR = async () => {
   }
 };
 
+// ✅ Resend OTP
+const handleResendOTP = async () => {
+  if (!otpData) return;
+  console.log("Resend OTP clicked for", otpData);
+
+  setLoading(true);
+  setError("");
+
+  try {
+    const res = await fetch("http://localhost:5000/auth/resendOtp", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mobile_number: otpData.mobilenumber, // ✅ correct field
+        service_id: otpData.service_id,       // ✅ correct field
+      }),
+    });
+
+    const data = await res.json();
+    console.log("Resend OTP response:", data);
+
+    if (res.ok && data.otp_id) {
+      setOtpData((prev) => ({ ...prev, otp_code: data.otp_code }));
+      const mob = otpData.mobilenumber;
+      setMaskedNumber("*".repeat(mob.length - 3) + mob.slice(-3));
+      setTimer(5 * 60);
+      startTimer();
+    } else {
+      setError(data.error || "Failed to resend OTP");
+    }
+  } catch (err) {
+    console.error(err);
+    setError("Server error while resending OTP");
+  } finally {
+    setLoading(false);
+  }
+};
+
+
 
   const startPolling = (sessionId) => {
     if (polling) clearInterval(polling);
@@ -331,7 +370,7 @@ const handleShowQR = async () => {
             <form onSubmit={handleCheckLDAP}>
               <input
                 type="text"
-                placeholder="Enter Username"
+                placeholder="Enter Username or Mobile Number or Email"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 style={{
@@ -413,7 +452,22 @@ const handleShowQR = async () => {
         {step === "otp" && otpData && !totpStep && !qrStep && (
           <div>
             <p>OTP sent to {maskedNumber}</p>
-            <p>Expires in: {formatTime(timer)}</p>
+<p>Expires in: {formatTime(timer)}</p>
+<button
+  type="button"
+  onClick={handleResendOTP}
+  style={{
+    marginTop: "10px",
+    background: "#ffc107",
+    color: "#000",
+    padding: "8px",
+    borderRadius: "8px",
+    border: "none",
+    width: "100%",
+  }}
+>
+  {loading ? "Resending..." : "Resend OTP"}
+</button>
 
             <form onSubmit={handleVerifyOTP}>
               <input

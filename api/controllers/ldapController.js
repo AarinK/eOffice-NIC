@@ -1,7 +1,7 @@
-const crypto = require("crypto");
-const { Service, ServiceLdapSetting } = require("../models");
-const SmsOtpLog = require("../models/smsOtpLog");
+const { SmsOtpLog, ServiceLdapSetting } = require("../models");
 const { checkUserExists } = require("../services/ldapService");
+const crypto = require("crypto");
+
 
 exports.checkUser = async (req, res) => {
   const { username, service_key } = req.body;
