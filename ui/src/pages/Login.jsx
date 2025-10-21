@@ -11,7 +11,8 @@ export default function Login() {
   const [error, setError] = useState("");
   const [timer, setTimer] = useState(0);
   const timerRef = useRef(null);
-
+const BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL;
+console.log("BASE_URL:", BASE_URL);
   // TOTP states
   const [totpSetup, setTotpSetup] = useState(null);
   const [totpToken, setTotpToken] = useState("");
@@ -39,7 +40,7 @@ export default function Login() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("http://localhost:5000/auth/checkUser", {
+      const res = await fetch(`${BASE_URL}/auth/checkUser`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ username, service_key: serviceKey }),
@@ -50,7 +51,7 @@ export default function Login() {
         const mob = data.mobilenumber;
         setMaskedNumber("*".repeat(mob.length - 3) + mob.slice(-3));
         setStep("otp");
-        setTimer(5 * 60);
+        setTimer(1 * 60);
         startTimer();
       } else {
         setError(data.error || "User not found");
@@ -91,7 +92,7 @@ export default function Login() {
     setError("");
 
     try {
-      const res = await fetch("http://localhost:5000/auth/verifyOtp", {
+      const res = await fetch(`${BASE_URL}/auth/verifyOtp`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -119,7 +120,7 @@ export default function Login() {
         return;
       }
 
-      const decryptRes = await fetch("http://localhost:5000/auth/decrypt", {
+      const decryptRes = await fetch(`${BASE_URL}/auth/decrypt`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ token: encryptedToken }),
@@ -148,12 +149,12 @@ export default function Login() {
   // ✅ OAuth
 const handleGoogleLogin = () => {
   localStorage.setItem("login_provider", "google");
-  window.location.href = `http://localhost:5000/auth/google?service=${serviceKey}`;
+  window.location.href = `${BASE_URL}/auth/google?service=${serviceKey}`;
 };
 const handleFacebookLogin = () => {
   localStorage.setItem("login_provider", "facebook");
   window.location.href = `http://localhost:5000/auth/facebook?service=${serviceKey}`;
-};  const handleTwitterLogin = () => window.location.href = `http://localhost:5000/auth/twitter?service=${serviceKey}`;
+};  const handleTwitterLogin = () => window.location.href = `${BASE_URL}/auth/twitter?service=${serviceKey}`;
 
   // ✅ TOTP setup
   const handleShowTOTP = async () => {
@@ -161,7 +162,7 @@ const handleFacebookLogin = () => {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("http://localhost:5000/auth/totp/setup", {
+      const res = await fetch(`${BASE_URL}/auth/totp/setup`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: otpData.name }),
@@ -187,7 +188,7 @@ const handleFacebookLogin = () => {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("http://localhost:5000/auth/totp/verify", {
+      const res = await fetch(`${BASE_URL}/auth/totp/verify`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ user_id: otpData.name, token: totpToken }),
@@ -216,7 +217,7 @@ const handleShowQR = async () => {
   setError("");
 
   try {
-    const res = await fetch("http://localhost:5000/auth/qr/init", {
+    const res = await fetch(`${BASE_URL}/auth/qr/init`, {
       method: "POST", // your backend might expect POST
       headers: { "Content-Type": "application/json" },
     });
@@ -250,29 +251,27 @@ const handleShowQR = async () => {
 // ✅ Resend OTP
 const handleResendOTP = async () => {
   if (!otpData) return;
-  console.log("Resend OTP clicked for", otpData);
-
   setLoading(true);
   setError("");
 
   try {
-    const res = await fetch("http://localhost:5000/auth/resendOtp", {
+    const res = await fetch(`${BASE_URL}/auth/resendOtp`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        mobile_number: otpData.mobilenumber, // ✅ correct field
-        service_id: otpData.service_id,       // ✅ correct field
+        mobile_number: otpData.mobilenumber,
+        service_id: otpData.service_id,
       }),
     });
 
     const data = await res.json();
-    console.log("Resend OTP response:", data);
 
     if (res.ok && data.otp_id) {
+      // Update OTP data if needed
       setOtpData((prev) => ({ ...prev, otp_code: data.otp_code }));
-      const mob = otpData.mobilenumber;
-      setMaskedNumber("*".repeat(mob.length - 3) + mob.slice(-3));
-      setTimer(5 * 60);
+
+      // Reset the timer to 1 minute
+      setTimer(60);
       startTimer();
     } else {
       setError(data.error || "Failed to resend OTP");
@@ -287,17 +286,18 @@ const handleResendOTP = async () => {
 
 
 
+
   const startPolling = (sessionId) => {
     if (polling) clearInterval(polling);
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`http://localhost:5000/auth/qr/status/${sessionId}`);
+        const res = await fetch(`${BASE_URL}/auth/qr/status/${sessionId}`);
         const data = await res.json();
         if (data.loggedIn) {
           clearInterval(interval);
 
           // decrypt token
-          const decryptRes = await fetch("http://localhost:5000/auth/decrypt", {
+          const decryptRes = await fetch(`${BASE_URL}/auth/decrypt`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ token: data.token }),
@@ -452,22 +452,32 @@ const handleResendOTP = async () => {
         {step === "otp" && otpData && !totpStep && !qrStep && (
           <div>
             <p>OTP sent to {maskedNumber}</p>
-<p>Expires in: {formatTime(timer)}</p>
-<button
-  type="button"
-  onClick={handleResendOTP}
-  style={{
-    marginTop: "10px",
-    background: "#ffc107",
-    color: "#000",
-    padding: "8px",
-    borderRadius: "8px",
-    border: "none",
-    width: "100%",
-  }}
->
-  {loading ? "Resending..." : "Resend OTP"}
-</button>
+<div style={{ marginTop: "10px" }}>
+<div style={{ marginTop: "10px" }}>
+  {timer > 0 ? (
+    <p style={{ color: "#bbb" }}>Resend OTP in {formatTime(timer)}</p>
+  ) : (
+    <button
+      type="button"
+      onClick={handleResendOTP}
+      disabled={loading} // disable button while request is in progress
+      style={{
+        background: "#ffc107",
+        color: "#000",
+        padding: "8px",
+        borderRadius: "8px",
+        border: "none",
+        width: "100%",
+        cursor: loading ? "not-allowed" : "pointer",
+      }}
+    >
+      {loading ? "Resending..." : "Resend OTP"}
+    </button>
+  )}
+</div>
+
+</div>
+
 
             <form onSubmit={handleVerifyOTP}>
               <input

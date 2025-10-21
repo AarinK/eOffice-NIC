@@ -4,6 +4,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 export default function AuthCallback() {
   const navigate = useNavigate();
   const { search } = useLocation();
+const BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL;
 
   useEffect(() => {
     const params = new URLSearchParams(search);
@@ -13,7 +14,7 @@ export default function AuthCallback() {
 
     (async () => {
       try {
-        const res = await fetch("http://localhost:5000/auth/decrypt", {
+        const res = await fetch(`${BASE_URL}/auth/decrypt`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ token }),

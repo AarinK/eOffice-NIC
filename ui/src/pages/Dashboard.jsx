@@ -5,6 +5,7 @@ export default function Dashboard() {
   const [user, setUser] = useState(null);
   const [loginProvider, setLoginProvider] = useState(null);
   const navigate = useNavigate();
+const BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL;
 
   useEffect(() => {
     const token = localStorage.getItem("auth_token");
@@ -18,7 +19,7 @@ export default function Dashboard() {
 
     const fetchDashboard = async () => {
       try {
-        const res = await fetch("http://localhost:5000/dashboard", {
+        const res = await fetch(`${BASE_URL}/dashboard`, {
           headers: { Authorization: `Bearer ${token}` },
         });
 

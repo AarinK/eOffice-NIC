@@ -1,4 +1,4 @@
-const { SmsOtpLog, ServiceLdapSetting } = require("../models");
+const { SmsOtpLog, ServiceLdapSetting,Service } = require("../models");
 const { checkUserExists } = require("../services/ldapService");
 const crypto = require("crypto");
 
