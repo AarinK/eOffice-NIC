@@ -6,7 +6,7 @@ const SmsOtpLog = require("../models/smsOtpLog");
 const { checkUserExists } = require("../services/ldapService");
 const { encryptToken } = require("../utils/Crypto");
 
-const { JWT_SECRET, FRONTEND_URL } = process.env;
+const { JWT_SECRET, FRONTEND_URL, BACKEND_URL} = process.env;
 
 exports.verifyOtp = async (req, res) => {
   const { mobile_number, service_id, otp_code } = req.body;
@@ -54,8 +54,8 @@ exports.verifyOtp = async (req, res) => {
       title: ldapResult.title,
       desc: ldapResult.desc,
       provider: "ldap",
-      iss: "http://localhost:5000",
-      aud: "http://localhost:5174",
+      iss: BACKEND_URL,
+      aud: FRONTEND_URL,
       jti: crypto.randomUUID(),
     };
 

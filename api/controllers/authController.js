@@ -1,7 +1,7 @@
 const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const Service = require("../models/Service");
-const { JWT_SECRET } = process.env;
+const { JWT_SECRET, FRONTEND_URL,BACKEND_URL } = process.env;
 const{encryptToken}= require("../utils/Crypto")
 async function completeLoginAndRedirect(req, res, userObj, serviceKey) {
   try {
@@ -24,8 +24,8 @@ async function completeLoginAndRedirect(req, res, userObj, serviceKey) {
             userObj.profile.cn ||
             userObj.profile.sAMAccountName)) ||
         null,
-     iss: "http://localhost:5000",      // your backend server (issuer)
-     aud: "http://localhost:5174",                // audience
+     iss: BACKEND_URL,      // your backend server (issuer)
+     aud: FRONTEND_URL,                // audience
       jti: crypto.randomUUID(),            // unique token ID
     };
 

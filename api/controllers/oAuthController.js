@@ -4,7 +4,7 @@ const crypto = require("crypto");
 const { encryptToken } = require("../utils/Crypto");
 const { completeLoginAndRedirect } = require("./authController");
 
-const { JWT_SECRET, FRONTEND_URL, LINKEDIN_CLIENT_ID, LINKEDIN_CLIENT_SECRET } = process.env;
+const { JWT_SECRET, FRONTEND_URL, LINKEDIN_CLIENT_ID, LINKEDIN_CLIENT_SECRET, BACKEND_URL } = process.env;
 
 exports.googleCallback = async (req, res) => {
   const serviceKey = req.query.state || "default";
@@ -18,8 +18,8 @@ exports.facebookCallback = (req, res) => {
     sub: profile.id,
     provider: "facebook",
     name: profile.displayName,
-    iss: "http://localhost:5000",
-    aud: "http://localhost:5174",
+    iss: BACKEND_URL,
+    aud: FRONTEND_URL,
     jti: crypto.randomUUID(),
   };
 

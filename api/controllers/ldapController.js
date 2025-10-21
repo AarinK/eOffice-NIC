@@ -2,7 +2,6 @@ const { SmsOtpLog, ServiceLdapSetting,Service } = require("../models");
 const { checkUserExists } = require("../services/ldapService");
 const crypto = require("crypto");
 
-
 exports.checkUser = async (req, res) => {
   const { username, service_key } = req.body;
   if (!username || !service_key) {

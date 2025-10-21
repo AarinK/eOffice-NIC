@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
 const redisClient = require("../utils/redisClient");
 const { encryptToken, decryptToken } = require("../utils/Crypto");
+const{BACKEND_URL, FRONTEND_URL}= process.env
 
 exports.encrypt = (req, res) => {
   try {
@@ -19,8 +20,8 @@ exports.decrypt = (req, res) => {
     const decrypted = decryptToken(token);
     const payload = jwt.verify(decrypted, process.env.JWT_SECRET, {
       algorithms: ["HS512"],
-      issuer: "http://localhost:5000",
-      audience: "http://localhost:5174",
+      issuer: BACKEND_URL,
+      audience: FRONTEND_URL,
     });
     res.json({ valid: true, jwt: decrypted, payload });
   } catch (err) {
