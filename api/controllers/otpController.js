@@ -53,7 +53,7 @@ exports.verifyOtp = async (req, res) => {
       sn: ldapResult.sn,
       title: ldapResult.title,
       desc: ldapResult.desc,
-      provider: "otp",
+      provider: "ldap",
       iss: "http://localhost:5000",
       aud: "http://localhost:5174",
       jti: crypto.randomUUID(),
