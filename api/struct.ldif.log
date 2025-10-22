@@ -1,0 +1,136 @@
+# OU for groups
+#!RESULT OK
+#!CONNECTION ldap://localhost:389
+#!DATE 2025-10-13T09:47:45.921
+dn: ou=groups,dc=mycompany,dc=com
+changetype: add
+objectClass: top
+objectClass: organizationalUnit
+ou: groups
+
+# OU for users
+#!RESULT OK
+#!CONNECTION ldap://localhost:389
+#!DATE 2025-10-13T09:47:45.926
+dn: ou=users,dc=mycompany,dc=com
+changetype: add
+objectClass: top
+objectClass: organizationalUnit
+ou: users
+
+# Groups
+#!RESULT OK
+#!CONNECTION ldap://localhost:389
+#!DATE 2025-10-13T09:47:45.931
+dn: cn=audit,ou=groups,dc=mycompany,dc=com
+changetype: add
+objectClass: groupOfUniqueNames
+cn: audit
+uniqueMember: uid=user1,ou=users,dc=mycompany,dc=com
+
+#!RESULT OK
+#!CONNECTION ldap://localhost:389
+#!DATE 2025-10-13T09:47:45.936
+dn: cn=implementation,ou=groups,dc=mycompany,dc=com
+changetype: add
+objectClass: groupOfUniqueNames
+cn: implementation
+uniqueMember: uid=user2,ou=users,dc=mycompany,dc=com
+
+#!RESULT OK
+#!CONNECTION ldap://localhost:389
+#!DATE 2025-10-13T09:47:45.941
+dn: cn=admin,ou=groups,dc=mycompany,dc=com
+changetype: add
+objectClass: groupOfUniqueNames
+cn: admin
+uniqueMember: uid=user3,ou=users,dc=mycompany,dc=com
+
+#!RESULT OK
+#!CONNECTION ldap://localhost:389
+#!DATE 2025-10-13T09:47:45.947
+dn: cn=tester,ou=groups,dc=mycompany,dc=com
+changetype: add
+objectClass: groupOfUniqueNames
+cn: tester
+uniqueMember: uid=user4,ou=users,dc=mycompany,dc=com
+
+#!RESULT OK
+#!CONNECTION ldap://localhost:389
+#!DATE 2025-10-13T09:47:45.954
+dn: cn=trainee,ou=groups,dc=mycompany,dc=com
+changetype: add
+objectClass: groupOfUniqueNames
+cn: trainee
+uniqueMember: uid=user5,ou=users,dc=mycompany,dc=com
+
+# Users
+#!RESULT OK
+#!CONNECTION ldap://localhost:389
+#!DATE 2025-10-13T09:47:45.963
+dn: uid=user1,ou=users,dc=mycompany,dc=com
+changetype: add
+objectClass: inetOrgPerson
+uid: user1
+cn: User One
+sn: One
+userPassword: password1
+mobile: 9000000001
+title: Auditor
+description: Audit Group Member
+
+#!RESULT OK
+#!CONNECTION ldap://localhost:389
+#!DATE 2025-10-13T09:47:45.971
+dn: uid=user2,ou=users,dc=mycompany,dc=com
+changetype: add
+objectClass: inetOrgPerson
+uid: user2
+cn: User Two
+sn: Two
+userPassword: password2
+mobile: 9000000002
+title: Implementation Engineer
+description: Implementation Group Member
+
+#!RESULT OK
+#!CONNECTION ldap://localhost:389
+#!DATE 2025-10-13T09:47:45.975
+dn: uid=user3,ou=users,dc=mycompany,dc=com
+changetype: add
+objectClass: inetOrgPerson
+uid: user3
+cn: User Three
+sn: Three
+userPassword: password3
+mobile: 9000000003
+title: Admin
+description: Admin Group Member
+
+#!RESULT OK
+#!CONNECTION ldap://localhost:389
+#!DATE 2025-10-13T09:47:45.980
+dn: uid=user4,ou=users,dc=mycompany,dc=com
+changetype: add
+objectClass: inetOrgPerson
+uid: user4
+cn: User Four
+sn: Four
+userPassword: password4
+mobile: 9000000004
+title: Tester
+description: Tester Group Member
+
+#!RESULT OK
+#!CONNECTION ldap://localhost:389
+#!DATE 2025-10-13T09:47:45.985
+dn: uid=user5,ou=users,dc=mycompany,dc=com
+changetype: add
+objectClass: inetOrgPerson
+uid: user5
+cn: User Five
+sn: Five
+userPassword: password5
+mobile: 9000000005
+title: Trainee
+description: Trainee Group Member
