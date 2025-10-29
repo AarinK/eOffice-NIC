@@ -25,7 +25,7 @@ router.post("/resendOtp", resendOtp);
 router.post("/logout",logout);
 router.post("/checkUserTotp", checkAndGenerateTotp);
 router.post("/verifyTotp",verifyTotp);
-router.post("/checkUserTotpWeb", checkUserTotpWeb)
+router.post("/checkUserTotpWeb", checkUserTotpWeb);
 // Token encryption
 router.post("/encrypt", encrypt);
 router.post("/decrypt", decrypt);
