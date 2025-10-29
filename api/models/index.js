@@ -3,6 +3,7 @@ const ServiceLdapSetting = require("./ServiceLdapSetting");
 const SmsOtpLog = require("./smsOtpLog");
 const LoginToken = require("./loginToken"); // no destructuring!
 const LoginAuditLog = require("./loginAuditLog");
+const TotpSecret = require("./TotpSecret")
 
 
 // Define associations here
@@ -16,4 +17,5 @@ module.exports = {
   SmsOtpLog,
   LoginToken,
   LoginAuditLog,
+  TotpSecret
 };

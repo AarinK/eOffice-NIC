@@ -85,6 +85,7 @@ exports.verifyOtp = async (req, res) => {
     res.json({
       success: true,
       redirectUrl: `${redirectBase}/auth/callback?token=${encodeURIComponent(encryptedToken)}`,
+      
     });
 
   } catch (err) {

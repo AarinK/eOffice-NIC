@@ -13,7 +13,7 @@ async function completeLoginAndRedirect(req, res, userObj, serviceKey) {
     // ✅ Add service_id in JWT payload
     const payload = {
       sub: userObj.profile?.uid || userObj.profile?.id || userObj.profile?.email || "unknown",
-      provider: userObj.provider || "unknown",
+      provider: "Google",
       name: userObj.profile?.displayName || userObj.profile?.cn || userObj.profile?.sAMAccountName || null,
       iss: BACKEND_URL,
       aud: FRONTEND_URL,

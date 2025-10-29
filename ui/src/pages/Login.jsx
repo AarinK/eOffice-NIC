@@ -15,13 +15,12 @@ export default function Login() {
   const timerRef = useRef(null);
 const [showOTPForm, setShowOTPForm] = useState(false);
 const [showTOTPForm, setShowTOTPForm] = useState(false);
+const [totpToken, setTotpToken] = useState(""); // user input
+const [totpUsername, setTotpUsername] = useState("");
 
   const BASE_URL = import.meta.env.VITE_BACKEND_BASE_URL;
 
-  // TOTP states
-  const [totpSetup, setTotpSetup] = useState(null);
-  const [totpToken, setTotpToken] = useState("");
-  const [totpStep, setTotpStep] = useState(false);
+
 
   // QR login states
   const [qrStep, setQrStep] = useState(false);
@@ -199,58 +198,130 @@ const [showTOTPForm, setShowTOTPForm] = useState(false);
   const handleTwitterLogin = () =>
     (window.location.href = `${BASE_URL}/auth/twitter?service=${serviceKey}`);
 
-  // TOTP setup
-  const handleShowTOTP = async () => {
-    if (!otpData) return setError("Complete LDAP login first");
-    setLoading(true);
-    setError("");
-    try {
-      const res = await fetch(`${BASE_URL}/auth/totp/setup`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: otpData.name }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        setTotpSetup(data);
-        setTotpStep(true);
-      } else {
-        setError(data.error || "Failed to setup TOTP");
-      }
-    } catch (err) {
-      console.error(err);
-      setError("Server error while setting up TOTP");
-    } finally {
-      setLoading(false);
-    }
-  };
+const handleShowTOTP = async () => {
+  if (!username) {
+    setError("Enter your username first");
+    console.log("[TOTP] No username entered");
+    return;
+  }
 
-  const handleVerifyTOTP = async (e) => {
-    e.preventDefault();
-    if (!totpSetup || !totpToken) return;
-    setLoading(true);
-    setError("");
-    try {
-      const res = await fetch(`${BASE_URL}/auth/totp/verify`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: otpData.name, token: totpToken }),
-      });
-      const data = await res.json();
-      if (res.ok && data.success) {
-        localStorage.setItem("auth_token", data.token);
-        localStorage.setItem("user_name", otpData.name);
-        window.location.href = "/dashboard";
-      } else {
-        setError(data.error || "Invalid TOTP code");
-      }
-    } catch (err) {
-      console.error(err);
-      setError("Server error while verifying TOTP");
-    } finally {
+  setLoading(true);
+  setError("");
+
+  try {
+    console.log("[TOTP] Sending request to checkUserTotpWeb");
+    console.log("[TOTP] Payload:", { username, service_key: serviceKey });
+
+    const res = await fetch(`${BASE_URL}/auth/checkUserTotpWeb`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, service_key: serviceKey }),
+    });
+
+    console.log("[TOTP] Response status:", res.status, res.statusText);
+
+    const data = await res.json();
+    console.log("[TOTP] Response JSON:", data);
+
+    if (!res.ok) {
+      setError(`Server returned status ${res.status}`);
+      console.error("[TOTP] Server error:", data);
       setLoading(false);
+      return;
     }
-  };
+
+    if (!data.userExists) {
+      setError(data.error || "User not found in LDAP");
+      console.warn("[TOTP] User not found:", data);
+      setLoading(false);
+      return;
+    }
+
+    console.log("[TOTP] LDAP verified. Setting username:", data.name || username);
+    // Use the LDAP returned name/uid if available
+    setTotpUsername(data.name || username);
+    setShowTOTPForm(true);
+
+  } catch (err) {
+    console.error("[TOTP] Exception while checking username:", err);
+    setError("Server error while checking username");
+  } finally {
+    setLoading(false);
+  }
+};
+
+
+
+// Verify TOTP
+const handleVerifyTOTP = async (e) => {
+  e.preventDefault();
+
+  if (!totpUsername || !totpToken) {
+    setError("Enter username and TOTP code");
+    return;
+  }
+
+  setLoading(true);
+  setError("");
+
+  try {
+    const res = await fetch(`${BASE_URL}/auth/verifyTotp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        username: totpUsername,
+        service_key: serviceKey,
+        token: totpToken,
+      }),
+    });
+
+    const data = await res.json();
+    console.log("[TOTP Verify Response]", data);
+
+    if (!res.ok || !data.success || !data.redirectUrl) {
+      setError(data.error || "Invalid TOTP code");
+      setLoading(false);
+      return;
+    }
+
+    // extract the encrypted token from redirectUrl
+    const urlParams = new URL(data.redirectUrl);
+    const encryptedToken = urlParams.searchParams.get("token");
+    if (!encryptedToken) {
+      setError("Token missing in server response");
+      setLoading(false);
+      return;
+    }
+
+    // decrypt token
+    const decryptRes = await fetch(`${BASE_URL}/auth/decrypt`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token: encryptedToken }),
+    });
+    const decryptData = await decryptRes.json();
+
+    if (!decryptData.valid || !decryptData.jwt) {
+      setError("Failed to decrypt token");
+      setLoading(false);
+      return;
+    }
+
+    // save token + redirect
+    localStorage.setItem("auth_token", decryptData.jwt);
+    localStorage.setItem("user_name", totpUsername);
+    window.location.href = "/dashboard";
+  } catch (err) {
+    console.error(err);
+    setError("Server error while verifying TOTP");
+  } finally {
+    setLoading(false);
+  }
+};
+
+
+
+
 
   // QR login
   const handleShowQR = async () => {
@@ -352,6 +423,7 @@ return (
           value={username}
           onChange={(e) => setUsername(e.target.value)}
           required
+          disabled={showLoginOptions || showOTPForm || showTOTPForm} // disabled after Next
         />
       </div>
 
@@ -400,30 +472,37 @@ return (
         </>
       )}
 
-      {/* Next clicked: show OTP / TOTP options */}
+      {/* After Next → clicked */}
       {showLoginOptions && !showOTPForm && !showTOTPForm && (
         <div className="d-flex flex-column gap-2 mt-2">
           <button
             className="btn btn-secondary w-100"
-            onClick={handleBackToInitial}
+            onClick={() => {
+              handleBackToInitial();
+              setShowLoginOptions(false);
+            }}
           >
-           ← Back
+            ← Back
           </button>
+
           <button
             className="btn btn-success w-100"
             onClick={() => {
-              handleCheckLDAP(); 
+              handleCheckLDAP();
               setShowOTPForm(true);
+              setShowLoginOptions(false);
             }}
             disabled={loading}
           >
-            {loading ? "Send OTP" : "Login with OTP"}
+            {loading ? "Sending OTP..." : "Login with OTP"}
           </button>
+
           <button
             className="btn btn-info w-100"
             onClick={() => {
-              handleShowTOTP(); 
+              handleShowTOTP();
               setShowTOTPForm(true);
+              setShowLoginOptions(false);
             }}
           >
             Login with TOTP
@@ -451,7 +530,7 @@ return (
               <form onSubmit={handleVerifyOTP}>
                 <input
                   type="text"
-                  className="form-control bg-light text-white border-secondary mb-3"
+                  className="form-control bg-light text-black border-secondary mb-3"
                   placeholder="Enter 6-digit OTP"
                   value={otp}
                   onChange={(e) => setOtp(e.target.value)}
@@ -468,7 +547,7 @@ return (
             </>
           )}
 
-          {/* Bottom Back button always visible */}
+          {/* Bottom Back button */}
           <button
             className="btn btn-secondary w-100 mt-2"
             onClick={() => {
@@ -482,49 +561,37 @@ return (
       )}
 
       {/* TOTP form */}
-      {showTOTPForm && (
-        <>
-          {totpStep && totpSetup && (
-            <form onSubmit={handleVerifyTOTP}>
-              <h5>Scan QR with Authenticator App</h5>
-              <img
-                src={totpSetup.qrCode}
-                alt="TOTP QR"
-                className="img-fluid border rounded p-2 bg-white mb-2"
-                width="200"
-              />
-              <p>
-                Secret: <span className="text-info">{totpSetup.secret}</span>
-              </p>
-              <input
-                type="text"
-                className="form-control bg-dark text-white border-secondary mb-3"
-                placeholder="Enter 6-digit code"
-                value={totpToken}
-                onChange={(e) => setTotpToken(e.target.value)}
-                maxLength={6}
-                required
-              />
-              <button className="btn btn-info w-100" disabled={loading}>
-                {loading ? "Verifying..." : "Verify TOTP"}
-              </button>
-            </form>
-          )}
+     {showTOTPForm && (
+  <form onSubmit={handleVerifyTOTP}>
+    <h5>Enter 6-digit TOTP code</h5>
+    <input
+      type="text"
+      className="form-control mb-3"
+      placeholder="Enter code"
+      value={totpToken}
+      onChange={(e) => setTotpToken(e.target.value)}
+      maxLength={6}
+      required
+    />
+    <button className="btn btn-info w-100" disabled={loading}>
+      {loading ? "Verifying..." : "Verify TOTP"}
+    </button>
 
-          {/* Bottom Back button always visible */}
-          <button
-            className="btn btn-secondary w-100 mt-2"
-            onClick={() => {
-              setShowTOTPForm(false);
-              handleBackToInitial();
-            }}
-          >
-            ← Back
-          </button>
-        </>
-      )}
+    <button
+      type="button"
+      className="btn btn-secondary w-100 mt-2"
+      onClick={() => {
+        setShowTOTPForm(false);
+        setTotpToken("");
+      }}
+    >
+      ← Back
+    </button>
+  </form>
+)}
 
-      {/* QR */}
+
+      {/* QR login */}
       {qrStep && qrData && (
         <div className="text-center mt-3">
           <h5>Scan to Login</h5>

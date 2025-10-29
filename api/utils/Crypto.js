@@ -19,3 +19,4 @@ function decryptToken(encrypted) {
 }
 
 module.exports = { encryptToken, decryptToken };
+

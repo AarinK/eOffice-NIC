@@ -24,6 +24,7 @@
     "ldapjs": "^3.0.7",
     "ldapts": "^8.0.9",
     "ngrok": "^5.0.0-beta.2",
+    "otpauth": "^9.4.1",
     "passport": "^0.7.0",
     "passport-facebook": "^3.0.0",
     "passport-google-oauth20": "^2.0.0",
